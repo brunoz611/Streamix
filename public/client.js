@@ -281,7 +281,9 @@ function applyPlayback(playback) {
   };
 
   const uiTime = state.playback.currentTime;
-  timeInput.value = String(Math.floor(uiTime));
+  if (document.activeElement !== timeInput) {
+    timeInput.value = String(Math.floor(uiTime));
+  }
   clock.textContent = formatTime(uiTime);
 }
 
@@ -344,7 +346,7 @@ playBtn.addEventListener("click", () => {
     roomId: state.roomId,
     userId: state.userId,
     action: "play",
-    currentTime: Number(timeInput.value || 0),
+    currentTime: estimatedTime(state.playback),
   }).catch((error) => showError(error.message || "Play impossible"));
 });
 
@@ -353,7 +355,7 @@ pauseBtn.addEventListener("click", () => {
     roomId: state.roomId,
     userId: state.userId,
     action: "pause",
-    currentTime: Number(timeInput.value || 0),
+    currentTime: estimatedTime(state.playback),
   }).catch((error) => showError(error.message || "Pause impossible"));
 });
 
