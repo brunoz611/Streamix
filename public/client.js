@@ -325,7 +325,7 @@ async function sendPlayback(action, extra = {}) {
   // Lock polls for 3s so a stale serverless instance can't undo this action.
   state.playbackLockUntil = Date.now() + 3000;
 
-  await apiAction("playback", {
+  const result = await apiAction("playback", {
     roomId: state.roomId,
     userId: state.userId,
     action,
@@ -333,10 +333,10 @@ async function sendPlayback(action, extra = {}) {
     ...extra,
   });
 
-  // After the server write, fetch authoritative state and apply it (lock lifted).
-  const roomData = await apiGetState();
-  if (roomData) {
-    applyRoomState(roomData, { forcePb: true });
+  // The server returns the authoritative room directly — no second fetch needed.
+  // This avoids landing on a different serverless instance with stale in-memory state.
+  if (result && result.room) {
+    applyRoomState(result.room, { forcePb: true });
   }
 }
 
