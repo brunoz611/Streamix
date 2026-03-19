@@ -294,6 +294,43 @@ function tickClock() {
   }
 }
 
+async function sendPlayback(action, extra = {}) {
+  const baseTime = estimatedTime(state.playback);
+
+  if (action === "pause") {
+    applyPlayback({
+      ...state.playback,
+      isPlaying: false,
+      currentTime: baseTime,
+      updatedAt: Date.now(),
+      serverNow: Date.now(),
+    });
+  }
+
+  if (action === "play") {
+    applyPlayback({
+      ...state.playback,
+      isPlaying: true,
+      currentTime: baseTime,
+      updatedAt: Date.now(),
+      serverNow: Date.now(),
+    });
+  }
+
+  await apiAction("playback", {
+    roomId: state.roomId,
+    userId: state.userId,
+    action,
+    currentTime: action === "seek" ? Number(timeInput.value || 0) : baseTime,
+    ...extra,
+  });
+
+  const roomData = await apiGetState();
+  if (roomData) {
+    applyRoomState(roomData);
+  }
+}
+
 function setRoomVisible() {
   joinPanel.classList.add("hidden");
   roomPanel.classList.remove("hidden");
@@ -342,29 +379,15 @@ chatForm.addEventListener("submit", (event) => {
 });
 
 playBtn.addEventListener("click", () => {
-  apiAction("playback", {
-    roomId: state.roomId,
-    userId: state.userId,
-    action: "play",
-    currentTime: estimatedTime(state.playback),
-  }).catch((error) => showError(error.message || "Play impossible"));
+  sendPlayback("play").catch((error) => showError(error.message || "Play impossible"));
 });
 
 pauseBtn.addEventListener("click", () => {
-  apiAction("playback", {
-    roomId: state.roomId,
-    userId: state.userId,
-    action: "pause",
-    currentTime: estimatedTime(state.playback),
-  }).catch((error) => showError(error.message || "Pause impossible"));
+  sendPlayback("pause").catch((error) => showError(error.message || "Pause impossible"));
 });
 
 seekBtn.addEventListener("click", () => {
-  apiAction("playback", {
-    roomId: state.roomId,
-    userId: state.userId,
-    action: "seek",
-    currentTime: Number(timeInput.value || 0),
+  sendPlayback("seek", {
     shouldPlay: state.playback.isPlaying,
   }).catch((error) => showError(error.message || "Seek impossible"));
 });
