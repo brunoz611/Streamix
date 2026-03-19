@@ -1,50 +1,72 @@
 // ==UserScript==
 // @name         Streamix AutoPlay
 // @namespace    https://streamix-indol.vercel.app
-// @version      1.0
-// @description  Auto-clique sur "Reprendre l'épisode" et passe en plein écran dès que la page Prime Video ou Crunchyroll se charge.
+// @version      2.0
+// @description  Auto-clique sur Play/Reprendre et passe en plein écran sur Prime Video et Crunchyroll.
 // @author       Streamix
 // @match        https://www.primevideo.com/*
 // @match        https://www.amazon.fr/gp/video/*
 // @match        https://www.amazon.com/gp/video/*
 // @match        https://www.crunchyroll.com/*
 // @grant        none
+// @run-at       document-idle
 // ==/UserScript==
 
 (function () {
   "use strict";
 
-  // ─── SÉLECTEURS ─────────────────────────────────────────────────────────────
+  // ─── SÉLECTEURS PAR PRIORITÉ ─────────────────────────────────────────────────
 
-  const PRIME_PLAY_SELECTORS = [
+  const PRIME_SELECTORS = [
+    // Lecteur vidéo — bouton pause/play dans le player
+    ".atvwebplayersdk-playpause-button",
+    "[class*='playpause']",
+    "[class*='PlayPause']",
+    // Bouton "Reprendre" sur la fiche
     "[data-testid='resume-button']",
     "[data-ref='resume_button']",
-    "button[class*='ResumeButton']",
-    "button[class*='resumeButton']",
+    // Bouton play générique
     "[data-testid='play-button']",
-    "a[class*='ResumeButton']",
-    ".atvwebplayersdk-playpause-button",
-    "[data-automation-id='play-button']",
+    "button[aria-label*='Play']",
+    "button[aria-label*='play']",
+    "button[aria-label*='Lecture']",
+    "button[aria-label*='Reprendre']",
+    "button[aria-label*='Resume']",
+    "[class*='ResumeButton']",
+    "[class*='resumeButton']",
+    "[class*='PlayButton']",
   ];
 
-  const CRUNCHY_PLAY_SELECTORS = [
+  const CRUNCHY_SELECTORS = [
+    // Lecteur Vilos
+    ".vjs-play-control",
+    ".vjs-big-play-button",
+    "[class*='playButton']",
+    "[class*='play-button']",
     "[data-testid='vilos-play-button']",
-    "button[class*='playBtn']",
-    "button[class*='play-btn']",
-    ".play-button",
-    "[aria-label='Play']",
-    "[aria-label='Lecture']",
+    "button[aria-label='Play']",
+    "button[aria-label='Lecture']",
     "button[aria-label*='lay']",
+    // Fiche épisode
+    "a[href*='/watch/'] button",
+    "[class*='EpisodeCard'] button",
+    "[class*='WatchButton']",
   ];
 
-  // ─── LOGIQUE ─────────────────────────────────────────────────────────────────
+  // ─── UTILITAIRES ──────────────────────────────────────────────────────────────
+
+  let done = false;
 
   function tryClick(selectors) {
     for (const sel of selectors) {
       try {
         const el = document.querySelector(sel);
-        if (el) {
+        if (el && el.offsetParent !== null) {
+          // Simuler un vrai clic utilisateur
+          el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+          el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
           el.click();
+          console.log("[Streamix AutoPlay] Cliqué :", sel);
           return true;
         }
       } catch (_) {}
@@ -52,32 +74,67 @@
     return false;
   }
 
+  function tryForcedVideoPlay() {
+    const video = document.querySelector("video");
+    if (video && video.paused) {
+      video.play().then(() => {
+        console.log("[Streamix AutoPlay] video.play() forcé ✓");
+      }).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
   function tryFullscreen() {
     const video = document.querySelector("video");
-    if (video && document.fullscreenElement !== video) {
+    if (video && !document.fullscreenElement) {
       video.requestFullscreen && video.requestFullscreen();
     }
   }
 
-  function autoPlay(selectors, label) {
-    let attempts = 0;
-    const max = 20; // jusqu'à 10 secondes
+  function attempt(selectors, label) {
+    if (done) return;
 
-    const iv = setInterval(() => {
-      attempts++;
-      const clicked = tryClick(selectors);
+    // 1. Essai boutons UI
+    if (tryClick(selectors)) {
+      done = true;
+      setTimeout(tryFullscreen, 2500);
+      return;
+    }
 
-      if (clicked) {
-        console.log(`[Streamix AutoPlay] ${label}: bouton cliqué ✓`);
-        clearInterval(iv);
-        // Plein écran 2s après le clic pour laisser le lecteur démarrer
-        setTimeout(tryFullscreen, 2000);
-        return;
-      }
+    // 2. Forçage direct sur l'élément <video>
+    if (tryForcedVideoPlay()) {
+      done = true;
+      setTimeout(tryFullscreen, 2500);
+    }
+  }
 
-      if (attempts >= max) {
-        console.warn(`[Streamix AutoPlay] ${label}: bouton introuvable après ${max} tentatives.`);
-        clearInterval(iv);
+  // ─── OBSERVATEUR — ATTEND LES ÉLÉMENTS CHARGÉS EN SPA ────────────────────────
+
+  function startObserver(selectors, label) {
+    let ticks = 0;
+    const maxTicks = 40; // 20 secondes max
+
+    // Essai immédiat
+    attempt(selectors, label);
+    if (done) return;
+
+    const observer = new MutationObserver(() => {
+      if (done) { observer.disconnect(); return; }
+      attempt(selectors, label);
+      if (done) observer.disconnect();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Garde-fou: arrêt après 20s même si pas trouvé
+    const watchdog = setInterval(() => {
+      ticks++;
+      attempt(selectors, label); // tentative toutes les 500ms aussi
+      if (done || ticks >= maxTicks) {
+        clearInterval(watchdog);
+        observer.disconnect();
+        if (!done) console.warn("[Streamix AutoPlay] Bouton introuvable après 20s.");
       }
     }, 500);
   }
@@ -86,9 +143,11 @@
 
   const host = location.hostname;
 
-  if (host.includes("primevideo.com") || host.includes("amazon.")) {
-    autoPlay(PRIME_PLAY_SELECTORS, "Prime Video");
+  if (host.includes("primevideo.com") || (host.includes("amazon.") && location.pathname.includes("video"))) {
+    console.log("[Streamix AutoPlay] Prime Video détecté");
+    startObserver(PRIME_SELECTORS, "Prime Video");
   } else if (host.includes("crunchyroll.com")) {
-    autoPlay(CRUNCHY_PLAY_SELECTORS, "Crunchyroll");
+    console.log("[Streamix AutoPlay] Crunchyroll détecté");
+    startObserver(CRUNCHY_SELECTORS, "Crunchyroll");
   }
 })();
