@@ -219,6 +219,56 @@ button.ghost {
   align-self: center;
 }
 
+/* ── Bannière AutoPlay ────────────────────────────────────────────────────── */
+.autoplay-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  background: linear-gradient(90deg, rgba(46,196,182,0.12), rgba(246,189,96,0.08));
+  border: 1px solid rgba(46, 196, 182, 0.35);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.autoplay-banner span {
+  flex: 1;
+}
+
+.btn-install {
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #071922;
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: filter 120ms ease;
+}
+
+.btn-install:hover {
+  filter: brightness(1.1);
+}
+
+.banner-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  font-weight: 400;
+  transition: color 120ms;
+}
+
+.banner-close:hover {
+  color: var(--text);
+}
+
 @media (min-width: 880px) {
   .columns {
     grid-template-columns: 1fr 1fr;
