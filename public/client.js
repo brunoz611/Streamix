@@ -45,8 +45,9 @@ const state = {
   lastDriftFixAt: 0,
   lastLaunchId: "",
   autoPollInFlight: false,
-  // After any play/pause/seek action, polls cannot overwrite playback for this duration.
-  playbackLockUntil: 0,
+  // When set, polls cannot override playback until server confirms the expected state.
+  // { isPlaying: bool, expiresAt: timestamp }
+  playbackIntent: null,
 };
 
 function formatTime(totalSeconds) {
@@ -186,11 +187,32 @@ function applyRoomState(roomData, { forcePb = false } = {}) {
   state.users = roomData.users || [];
   state.messages = roomData.messages || [];
   state.launch = roomData.launch || null;
-  // Don't let a stale poll from another serverless instance overwrite a
-  // locally-applied play/pause/seek during the lock window.
-  if (forcePb || Date.now() >= state.playbackLockUntil) {
-    applyPlayback(roomData.playback || state.playback);
+
+  const pb = roomData.playback || state.playback;
+  const intent = state.playbackIntent;
+
+  if (forcePb) {
+    // Authoritative response from our own action — always apply.
+    // If server already matches our intent, clear the lock.
+    if (intent && pb.isPlaying === intent.isPlaying) {
+      state.playbackIntent = null;
+    }
+    applyPlayback(pb);
+  } else if (intent) {
+    if (Date.now() > intent.expiresAt) {
+      // Lock expired — accept server state and give up waiting.
+      state.playbackIntent = null;
+      applyPlayback(pb);
+    } else if (pb.isPlaying === intent.isPlaying) {
+      // Server confirmed our intent — clear lock and apply.
+      state.playbackIntent = null;
+      applyPlayback(pb);
+    }
+    // else: server disagrees AND lock is active — ignore this poll's playback.
+  } else {
+    applyPlayback(pb);
   }
+
   renderUsers();
   renderMessages();
   maybeHandleLaunch(roomData.launch);
@@ -322,8 +344,10 @@ async function sendPlayback(action, extra = {}) {
     });
   }
 
-  // Lock polls for 3s so a stale serverless instance can't undo this action.
-  state.playbackLockUntil = Date.now() + 3000;
+  // Lock polls until the server confirms the expected state (max 20s).
+  if (action === "pause") state.playbackIntent = { isPlaying: false, expiresAt: Date.now() + 20000 };
+  if (action === "play")  state.playbackIntent = { isPlaying: true,  expiresAt: Date.now() + 20000 };
+  if (action === "seek")  state.playbackIntent = null; // seek just applies immediately
 
   const result = await apiAction("playback", {
     roomId: state.roomId,
