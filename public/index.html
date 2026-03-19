@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plugd Companion Watch Party</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <main class="app">
+      <section class="panel panel--join" id="joinPanel">
+        <h1>Plugd Companion</h1>
+        <p>Watch together pour Crunchyroll et Prime Video, sans restream.</p>
+        <form id="joinForm" class="join-form">
+          <label>
+            Room ID
+            <input id="roomIdInput" type="text" placeholder="anime-night" required />
+          </label>
+          <label>
+            Pseudo
+            <input id="userNameInput" type="text" placeholder="Ton nom" maxlength="24" required />
+          </label>
+          <button type="submit">Rejoindre la room</button>
+        </form>
+      </section>
+
+      <section class="panel panel--room hidden" id="roomPanel">
+        <header class="room-header">
+          <div>
+            <h2 id="roomTitle">Room</h2>
+            <p id="controllerLabel">Controle: -</p>
+          </div>
+          <div class="header-actions">
+            <select id="djSelect" aria-label="Selection DJ"></select>
+            <button id="assignDjBtn" class="ghost">Donner DJ</button>
+            <button id="claimControlBtn" class="ghost">Prendre le controle (DJ)</button>
+            <button id="resyncBtn" class="ghost">Resync</button>
+            <button id="resyncAllBtn" class="ghost">Resync Tous</button>
+          </div>
+        </header>
+
+        <div class="columns">
+          <section class="card">
+            <h3>Companion Sync</h3>
+            <p class="muted">Synchro manuelle du lecteur externe (play, pause, seek).</p>
+            <div class="sync-controls">
+              <div class="time-row">
+                <label>
+                  Timecode (secondes)
+                  <input id="timeInput" type="number" min="0" step="1" value="0" />
+                </label>
+                <span id="clock">00:00:00</span>
+              </div>
+              <div class="button-row">
+                <button id="playBtn">Play</button>
+                <button id="pauseBtn">Pause</button>
+                <button id="seekBtn" class="ghost">Seek</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>Lancer Episode</h3>
+            <p class="muted">Ouvre la plateforme dans un nouvel onglet et lance un countdown commun.</p>
+            <div class="launch-grid">
+              <label>
+                Plateforme
+                <select id="platformSelect">
+                  <option value="crunchyroll">Crunchyroll</option>
+                  <option value="prime-video">Prime Video</option>
+                </select>
+              </label>
+              <label>
+                URL episode
+                <input id="episodeUrlInput" type="url" placeholder="https://www.crunchyroll.com/..." />
+              </label>
+              <label>
+                Delai (ms)
+                <input id="delayInput" type="number" min="2000" max="30000" value="5000" />
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="launchBtn">Lancer episode</button>
+              <span id="countdownLabel" class="countdown"></span>
+            </div>
+          </section>
+        </div>
+
+        <div class="columns">
+          <section class="card">
+            <h3>Participants</h3>
+            <ul id="usersList" class="users-list"></ul>
+          </section>
+
+          <section class="card chat-card">
+            <h3>Chat</h3>
+            <ul id="messages" class="messages"></ul>
+            <form id="chatForm" class="chat-form">
+              <input id="chatInput" type="text" maxlength="300" placeholder="Message..." />
+              <button type="submit">Envoyer</button>
+            </form>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="/client.js"></script>
+  </body>
+</html>

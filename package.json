@@ -1,0 +1,19 @@
+{
+  "name": "plugd",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@upstash/redis": "^1.37.0",
+    "express": "^5.2.1"
+  }
+}
