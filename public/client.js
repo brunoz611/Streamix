@@ -45,6 +45,8 @@ const state = {
   lastDriftFixAt: 0,
   lastLaunchId: "",
   autoPollInFlight: false,
+  // After any play/pause/seek action, polls cannot overwrite playback for this duration.
+  playbackLockUntil: 0,
 };
 
 function formatTime(totalSeconds) {
@@ -180,11 +182,15 @@ async function apiAction(action, payload) {
   return data.data;
 }
 
-function applyRoomState(roomData) {
+function applyRoomState(roomData, { forcePb = false } = {}) {
   state.users = roomData.users || [];
   state.messages = roomData.messages || [];
   state.launch = roomData.launch || null;
-  applyPlayback(roomData.playback || state.playback);
+  // Don't let a stale poll from another serverless instance overwrite a
+  // locally-applied play/pause/seek during the lock window.
+  if (forcePb || Date.now() >= state.playbackLockUntil) {
+    applyPlayback(roomData.playback || state.playback);
+  }
   renderUsers();
   renderMessages();
   maybeHandleLaunch(roomData.launch);
@@ -297,6 +303,7 @@ function tickClock() {
 async function sendPlayback(action, extra = {}) {
   const baseTime = estimatedTime(state.playback);
 
+  // Apply optimistic local state immediately.
   if (action === "pause") {
     applyPlayback({
       ...state.playback,
@@ -305,9 +312,7 @@ async function sendPlayback(action, extra = {}) {
       updatedAt: Date.now(),
       serverNow: Date.now(),
     });
-  }
-
-  if (action === "play") {
+  } else if (action === "play") {
     applyPlayback({
       ...state.playback,
       isPlaying: true,
@@ -317,6 +322,9 @@ async function sendPlayback(action, extra = {}) {
     });
   }
 
+  // Lock polls for 3s so a stale serverless instance can't undo this action.
+  state.playbackLockUntil = Date.now() + 3000;
+
   await apiAction("playback", {
     roomId: state.roomId,
     userId: state.userId,
@@ -325,9 +333,10 @@ async function sendPlayback(action, extra = {}) {
     ...extra,
   });
 
+  // After the server write, fetch authoritative state and apply it (lock lifted).
   const roomData = await apiGetState();
   if (roomData) {
-    applyRoomState(roomData);
+    applyRoomState(roomData, { forcePb: true });
   }
 }
 
