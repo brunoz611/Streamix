@@ -279,7 +279,7 @@ function maybeHandleLaunch(launch) {
   }
 
   state.lastLaunchId = launch.id;
-  window.open(launch.url, "_blank", "noopener,noreferrer");
+  window.open(addLaunchFlags(launch.url), "_blank", "noopener,noreferrer");
 
   if (state.countdownTimer) {
     clearInterval(state.countdownTimer);
@@ -298,6 +298,16 @@ function maybeHandleLaunch(launch) {
     const seconds = (msLeft / 1000).toFixed(1);
     countdownLabel.textContent = `${label}: lancement dans ${seconds}s`;
   }, 100);
+}
+
+function addLaunchFlags(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    parsed.searchParams.set("plugd_start", "0");
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
 }
 
 function applyPlayback(playback) {

@@ -57,6 +57,52 @@
 
   let done = false;
 
+  function shouldForceStartAtZero() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("plugd_start") === "0";
+  }
+
+  function forceStartAtZero() {
+    if (!shouldForceStartAtZero()) return;
+
+    const start = Date.now();
+    const maxDurationMs = 15000;
+
+    const tryReset = () => {
+      const video = document.querySelector("video");
+      if (!video) return false;
+
+      // Re-apply while the platform restores its own resume point.
+      if (video.currentTime > 0.2) {
+        video.currentTime = 0;
+      }
+      return true;
+    };
+
+    tryReset();
+
+    const interval = setInterval(() => {
+      tryReset();
+      if (Date.now() - start >= maxDurationMs) {
+        clearInterval(interval);
+      }
+    }, 300);
+
+    const observer = new MutationObserver(() => {
+      tryReset();
+      if (Date.now() - start >= maxDurationMs) {
+        observer.disconnect();
+      }
+    });
+
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      clearInterval(interval);
+      observer.disconnect();
+    }, maxDurationMs + 500);
+  }
+
   function tryClick(selectors) {
     for (const sel of selectors) {
       try {
@@ -145,9 +191,11 @@
 
   if (host.includes("primevideo.com") || (host.includes("amazon.") && location.pathname.includes("video"))) {
     console.log("[Streamix AutoPlay] Prime Video détecté");
+    forceStartAtZero();
     startObserver(PRIME_SELECTORS, "Prime Video");
   } else if (host.includes("crunchyroll.com")) {
     console.log("[Streamix AutoPlay] Crunchyroll détecté");
+    forceStartAtZero();
     startObserver(CRUNCHY_SELECTORS, "Crunchyroll");
   }
 })();
