@@ -19,7 +19,8 @@ app.get("/api/room", async (req, res) => {
     });
     res.json({ ok: true, data: result });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error.message || "Unknown error" });
+    // Keep HTTP 200 for expected business errors to avoid noisy browser network failures.
+    res.json({ ok: false, error: error.message || "Unknown error" });
   }
 });
 
@@ -30,7 +31,8 @@ app.post("/api/room", async (req, res) => {
     const result = await handleAction({ action, payload });
     res.json({ ok: true, data: result });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error.message || "Unknown error" });
+    // Keep HTTP 200 for expected business errors to avoid noisy browser network failures.
+    res.json({ ok: false, error: error.message || "Unknown error" });
   }
 });
 

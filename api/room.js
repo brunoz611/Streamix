@@ -33,6 +33,7 @@ module.exports = async function handler(req, res) {
 
     res.status(405).json({ ok: false, error: "Method not allowed" });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error.message || "Unknown error" });
+    // Keep HTTP 200 for expected business errors to avoid noisy browser network failures.
+    res.status(200).json({ ok: false, error: error.message || "Unknown error" });
   }
 };
