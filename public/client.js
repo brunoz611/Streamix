@@ -24,6 +24,11 @@ const delayInput = document.getElementById("delayInput");
 const launchBtn = document.getElementById("launchBtn");
 const countdownLabel = document.getElementById("countdownLabel");
 const resyncAllBtn = document.getElementById("resyncAllBtn");
+const streamUrlInput = document.getElementById("streamUrlInput");
+const setStreamBtn = document.getElementById("setStreamBtn");
+const clearStreamBtn = document.getElementById("clearStreamBtn");
+const streamStatus = document.getElementById("streamStatus");
+const roomVideo = document.getElementById("roomVideo");
 
 const STORAGE_USER_ID_KEY = "plugd_user_id";
 
@@ -33,6 +38,10 @@ const state = {
   users: [],
   messages: [],
   launch: null,
+  stream: {
+    url: "",
+    updatedAt: Date.now(),
+  },
   playback: {
     isPlaying: false,
     currentTime: 0,
@@ -48,6 +57,8 @@ const state = {
   // When set, polls cannot override playback until server confirms the expected state.
   // { isPlaying: bool, expiresAt: timestamp }
   playbackIntent: null,
+  syncingVideo: false,
+  lastVideoSyncAt: 0,
 };
 
 function formatTime(totalSeconds) {
@@ -123,6 +134,8 @@ function renderUsers() {
   seekBtn.disabled = !canPress;
   launchBtn.disabled = !canPress;
   resyncAllBtn.disabled = !canPress;
+  setStreamBtn.disabled = !canPress;
+  clearStreamBtn.disabled = !canPress;
   assignDjBtn.disabled = !host;
   claimControlBtn.disabled = !host;
 
@@ -187,6 +200,7 @@ function applyRoomState(roomData, { forcePb = false } = {}) {
   state.users = roomData.users || [];
   state.messages = roomData.messages || [];
   state.launch = roomData.launch || null;
+  applyStream(roomData.stream || state.stream);
 
   const pb = roomData.playback || state.playback;
   const intent = state.playbackIntent;
@@ -310,6 +324,61 @@ function addLaunchFlags(rawUrl) {
   }
 }
 
+function applyStream(stream) {
+  const nextUrl = stream && stream.url ? String(stream.url).trim() : "";
+  const currentUrl = state.stream && state.stream.url ? state.stream.url : "";
+
+  state.stream = {
+    url: nextUrl,
+    updatedAt: Number(stream && stream.updatedAt) || Date.now(),
+  };
+
+  if (document.activeElement !== streamUrlInput) {
+    streamUrlInput.value = nextUrl;
+  }
+
+  streamStatus.textContent = nextUrl ? "Flux actif" : "Aucun flux";
+
+  if (nextUrl === currentUrl) {
+    return;
+  }
+
+  if (!nextUrl) {
+    roomVideo.removeAttribute("src");
+    roomVideo.load();
+    return;
+  }
+
+  roomVideo.src = nextUrl;
+  roomVideo.load();
+}
+
+async function syncVideoToPlayback() {
+  if (!roomVideo || !state.stream.url || state.syncingVideo) {
+    return;
+  }
+
+  state.syncingVideo = true;
+  try {
+    const targetTime = Math.max(0, estimatedTime(state.playback));
+    const current = Number(roomVideo.currentTime) || 0;
+
+    if (Math.abs(current - targetTime) > 1.0) {
+      roomVideo.currentTime = targetTime;
+    }
+
+    if (state.playback.isPlaying) {
+      if (roomVideo.paused) {
+        await roomVideo.play().catch(() => null);
+      }
+    } else if (!roomVideo.paused) {
+      roomVideo.pause();
+    }
+  } finally {
+    state.syncingVideo = false;
+  }
+}
+
 function applyPlayback(playback) {
   state.playback = {
     isPlaying: Boolean(playback.isPlaying),
@@ -323,12 +392,18 @@ function applyPlayback(playback) {
     timeInput.value = String(Math.floor(uiTime));
   }
   clock.textContent = formatTime(uiTime);
+  syncVideoToPlayback().catch(() => null);
 }
 
 function tickClock() {
   if (state.playback.isPlaying) {
     const elapsed = (Date.now() - state.playback.updatedAt) / 1000;
     clock.textContent = formatTime(state.playback.currentTime + Math.max(0, elapsed));
+  }
+
+  if (state.stream.url && Date.now() - state.lastVideoSyncAt > 1200) {
+    state.lastVideoSyncAt = Date.now();
+    syncVideoToPlayback().catch(() => null);
   }
 }
 
@@ -486,6 +561,44 @@ launchBtn.addEventListener("click", () => {
     platform: platformSelect.value,
     delayMs: Number(delayInput.value || 5000),
   }).catch((error) => showError(error.message || "Launch impossible"));
+});
+
+setStreamBtn.addEventListener("click", () => {
+  const url = streamUrlInput.value.trim();
+  if (!url) {
+    showError("Entrez une URL de flux video.");
+    return;
+  }
+
+  apiAction("stream-set", {
+    roomId: state.roomId,
+    userId: state.userId,
+    url,
+  })
+    .then((result) => {
+      if (result && result.room) {
+        applyRoomState(result.room, { forcePb: true });
+      }
+    })
+    .catch((error) => showError(error.message || "Flux video impossible"));
+});
+
+clearStreamBtn.addEventListener("click", () => {
+  apiAction("stream-set", {
+    roomId: state.roomId,
+    userId: state.userId,
+    url: "",
+  })
+    .then((result) => {
+      if (result && result.room) {
+        applyRoomState(result.room, { forcePb: true });
+      }
+    })
+    .catch((error) => showError(error.message || "Suppression du flux impossible"));
+});
+
+roomVideo.addEventListener("loadedmetadata", () => {
+  syncVideoToPlayback().catch(() => null);
 });
 
 setInterval(tickClock, 250);

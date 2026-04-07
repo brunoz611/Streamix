@@ -51,6 +51,23 @@
 
         <div class="columns">
           <section class="card">
+            <h3>Flux Video Integre</h3>
+            <p class="muted">Partagez un lien video direct (mp4, m3u8, etc.) pour regarder sur le site.</p>
+            <div class="launch-grid">
+              <label>
+                URL du flux
+                <input id="streamUrlInput" type="url" placeholder="https://exemple.com/stream.m3u8" />
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="setStreamBtn">Charger le flux</button>
+              <button id="clearStreamBtn" class="ghost">Retirer le flux</button>
+              <span id="streamStatus" class="countdown"></span>
+            </div>
+            <video id="roomVideo" class="room-video" controls playsinline preload="metadata"></video>
+          </section>
+
+          <section class="card">
             <h3>Companion Sync</h3>
             <p class="muted">Synchro manuelle du lecteur externe (play, pause, seek).</p>
             <div class="sync-controls">
