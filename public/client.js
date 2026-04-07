@@ -26,9 +26,12 @@ const countdownLabel = document.getElementById("countdownLabel");
 const resyncAllBtn = document.getElementById("resyncAllBtn");
 const streamUrlInput = document.getElementById("streamUrlInput");
 const setStreamBtn = document.getElementById("setStreamBtn");
+const demoStreamBtn = document.getElementById("demoStreamBtn");
 const clearStreamBtn = document.getElementById("clearStreamBtn");
 const streamStatus = document.getElementById("streamStatus");
 const roomVideo = document.getElementById("roomVideo");
+
+const DEMO_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
 
 const STORAGE_USER_ID_KEY = "plugd_user_id";
 
@@ -60,6 +63,48 @@ const state = {
   syncingVideo: false,
   lastVideoSyncAt: 0,
 };
+
+const streamEngine = {
+  hls: null,
+};
+
+function destroyStreamEngine() {
+  if (streamEngine.hls) {
+    streamEngine.hls.destroy();
+    streamEngine.hls = null;
+  }
+}
+
+function normalizeUrl(value) {
+  try {
+    return new URL(String(value || "").trim());
+  } catch {
+    return null;
+  }
+}
+
+function isDrmPlatform(urlObject) {
+  if (!urlObject) return false;
+  const host = urlObject.hostname.toLowerCase();
+  return [
+    "crunchyroll.com",
+    "primevideo.com",
+    "amazon.com",
+    "netflix.com",
+    "disneyplus.com",
+    "max.com",
+  ].some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+function getMediaType(urlObject) {
+  if (!urlObject) return "unknown";
+  const path = urlObject.pathname.toLowerCase();
+  if (path.endsWith(".m3u8")) return "hls";
+  if (path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".ogg") || path.endsWith(".ogv")) {
+    return "file";
+  }
+  return "unknown";
+}
 
 function formatTime(totalSeconds) {
   const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -135,6 +180,7 @@ function renderUsers() {
   launchBtn.disabled = !canPress;
   resyncAllBtn.disabled = !canPress;
   setStreamBtn.disabled = !canPress;
+  demoStreamBtn.disabled = !canPress;
   clearStreamBtn.disabled = !canPress;
   assignDjBtn.disabled = !host;
   claimControlBtn.disabled = !host;
@@ -343,14 +389,59 @@ function applyStream(stream) {
     return;
   }
 
+  destroyStreamEngine();
+
   if (!nextUrl) {
     roomVideo.removeAttribute("src");
     roomVideo.load();
+    streamStatus.textContent = "Aucun flux";
+    return;
+  }
+
+  const parsed = normalizeUrl(nextUrl);
+  const mediaType = getMediaType(parsed);
+
+  if (isDrmPlatform(parsed)) {
+    roomVideo.removeAttribute("src");
+    roomVideo.load();
+    streamStatus.textContent = "Plateforme DRM: flux direct impossible";
+    return;
+  }
+
+  if (mediaType === "hls") {
+    if (roomVideo.canPlayType("application/vnd.apple.mpegurl")) {
+      roomVideo.src = nextUrl;
+      roomVideo.load();
+      streamStatus.textContent = "Flux HLS actif";
+      return;
+    }
+
+    if (window.Hls && window.Hls.isSupported()) {
+      streamEngine.hls = new window.Hls({
+        lowLatencyMode: true,
+      });
+      streamEngine.hls.loadSource(nextUrl);
+      streamEngine.hls.attachMedia(roomVideo);
+      streamStatus.textContent = "Flux HLS actif";
+      return;
+    }
+
+    roomVideo.removeAttribute("src");
+    roomVideo.load();
+    streamStatus.textContent = "HLS non supporte sur ce navigateur";
+    return;
+  }
+
+  if (mediaType === "unknown") {
+    roomVideo.removeAttribute("src");
+    roomVideo.load();
+    streamStatus.textContent = "URL non reconnue (utilisez .mp4/.webm/.m3u8)";
     return;
   }
 
   roomVideo.src = nextUrl;
   roomVideo.load();
+  streamStatus.textContent = "Flux actif";
 }
 
 async function syncVideoToPlayback() {
@@ -570,10 +661,21 @@ setStreamBtn.addEventListener("click", () => {
     return;
   }
 
+  const parsed = normalizeUrl(url);
+  if (!parsed) {
+    showError("URL invalide.");
+    return;
+  }
+
+  if (isDrmPlatform(parsed)) {
+    showError("Crunchyroll/Prime/Netflix ne fournissent pas de flux video direct lisible ici (DRM). Utilisez une URL .mp4/.m3u8.");
+    return;
+  }
+
   apiAction("stream-set", {
     roomId: state.roomId,
     userId: state.userId,
-    url,
+    url: parsed.toString(),
   })
     .then((result) => {
       if (result && result.room) {
@@ -581,6 +683,11 @@ setStreamBtn.addEventListener("click", () => {
       }
     })
     .catch((error) => showError(error.message || "Flux video impossible"));
+});
+
+demoStreamBtn.addEventListener("click", () => {
+  streamUrlInput.value = DEMO_STREAM_URL;
+  setStreamBtn.click();
 });
 
 clearStreamBtn.addEventListener("click", () => {
@@ -599,6 +706,10 @@ clearStreamBtn.addEventListener("click", () => {
 
 roomVideo.addEventListener("loadedmetadata", () => {
   syncVideoToPlayback().catch(() => null);
+});
+
+roomVideo.addEventListener("error", () => {
+  streamStatus.textContent = "Flux non lisible (CORS/DRM/format)";
 });
 
 setInterval(tickClock, 250);
